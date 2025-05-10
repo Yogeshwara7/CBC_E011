@@ -1,0 +1,20 @@
+{
+    "use_case": "vegetation_monitoring",
+    "region": {
+        "name": "Thar Desert, Rajasthan",
+        "coordinates": {
+            "north": 28.5,
+            "south": 25.5,
+            "east": 72.5,
+            "west": 69.5
+        }
+    },
+    "date_range": {
+        "start_date": "2023-01-01",
+        "end_date": "2023-12-31"
+    },
+    "index_type": "NDVI",
+    "alert_threshold": 0.3,
+    "satellite": "LANDSAT/LC08/C02/T1_TOA",
+    "cloud_cover_threshold": 20
+} 
