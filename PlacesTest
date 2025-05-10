@@ -1,0 +1,16 @@
+"coordinates": {
+    "north": 27.0000,
+    "south": 26.8000,
+    "east": 75.2000,
+    "west": 74.8000
+}
+
+"region": {
+    "name": "Bangalore",
+    "coordinates": {
+        "north": 13.1391,
+        "south": 12.8340,
+        "east": 77.7126,
+        "west": 77.3791
+    }
+}

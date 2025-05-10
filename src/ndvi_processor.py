@@ -34,7 +34,15 @@ class NDVIProcessor:
         def process_image(image):
             ndvi = self.data_fetcher.calculate_ndvi(image)
             date = ee.Date(image.get('system:time_start')).format('YYYY-MM-dd')
-            return ndvi.set('date', date)
+            mean_ndvi = ndvi.reduceRegion(
+                reducer=ee.Reducer.mean(),
+                geometry=self.data_fetcher.get_region(),
+                scale=30
+            ).get('NDVI')
+            return ee.Feature(None, {
+                'date': date,
+                'NDVI': mean_ndvi
+            })
         
         ndvi_collection = collection.map(process_image)
         return ndvi_collection 

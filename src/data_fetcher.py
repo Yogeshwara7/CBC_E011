@@ -4,11 +4,14 @@ from datetime import datetime
 import pandas as pd
 import os
 import sys
+import streamlit as st
 
 class DataFetcher:
-    def __init__(self, config_path='config/config.json'):
+    def __init__(self, config_path='config/config.json', region=None):
         """Initialize the DataFetcher with configuration."""
         self.config = self._load_config(config_path)
+        if region is not None:
+            self.config['region'] = region
         self._initialize_ee()
         
     def _load_config(self, config_path):
@@ -24,7 +27,7 @@ class DataFetcher:
         """Initialize Earth Engine API with Windows-specific handling."""
         try:
             if not ee.data._initialized:
-                ee.Initialize()
+                ee.Initialize(project='chromatic-being-459406-m1')
         except Exception as e:
             print("Please authenticate with Earth Engine first using 'earthengine authenticate'")
             raise e
@@ -37,19 +40,20 @@ class DataFetcher:
             coords['east'], coords['north']
         ])
     
-    def fetch_satellite_data(self):
-        """Fetch satellite data based on configuration."""
+    def fetch_satellite_data(self, start_date=None, end_date=None):
+        """Fetch satellite data based on configuration or provided dates."""
         try:
             region = self.get_region()
-            start_date = self.config['date_range']['start_date']
-            end_date = self.config['date_range']['end_date']
-            
-            # Get the satellite collection
+            # Use provided dates if given, else fall back to config
+            if start_date is None:
+                start_date = self.config['date_range']['start_date']
+            if end_date is None:
+                end_date = self.config['date_range']['end_date']
+
             collection = ee.ImageCollection(self.config['satellite']) \
                 .filterBounds(region) \
                 .filterDate(start_date, end_date) \
                 .filter(ee.Filter.lt('CLOUD_COVER', self.config['cloud_cover_threshold']))
-            
             return collection
         except Exception as e:
             print(f"Error fetching satellite data: {str(e)}")
@@ -66,3 +70,13 @@ class DataFetcher:
         except Exception as e:
             print(f"Error calculating NDVI: {str(e)}")
             raise 
+
+if 'region' in st.session_state:
+    region = st.session_state['region']
+else:
+    import json
+    with open('config/config.json', 'r') as f:
+        config = json.load(f)
+    region = config['region']
+
+data_fetcher = DataFetcher(region=region) 

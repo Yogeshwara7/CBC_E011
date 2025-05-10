@@ -1,17 +1,17 @@
 {
     "use_case": "vegetation_monitoring",
     "region": {
-        "name": "Thar Desert, Rajasthan",
+        "name": "Sambhar Salt Lake, Rajasthan",
         "coordinates": {
-            "north": 28.5,
-            "south": 25.5,
-            "east": 72.5,
-            "west": 69.5
+             "north": 26.9800,
+             "south": 26.8500,
+             "east": 75.9000,
+             "west": 75.7500
         }
     },
     "date_range": {
-        "start_date": "2023-01-01",
-        "end_date": "2023-12-31"
+        "start_date": "2020-05-01",
+        "end_date": "2025-05-01"
     },
     "index_type": "NDVI",
     "alert_threshold": 0.3,
