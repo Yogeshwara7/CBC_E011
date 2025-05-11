@@ -18,6 +18,11 @@ from src.ui_components import (
     render_main_content
 )
 from datetime import datetime, timedelta
+import plotly.io as pio
+from fpdf import FPDF
+import matplotlib.pyplot as plt
+import geopandas as gpd
+from shapely.geometry import box
 
 # Windows-specific setup
 if sys.platform == 'win32':
@@ -117,6 +122,32 @@ def get_place_coordinates(place_id):
         st.error(f"Error getting place coordinates: {str(e)}")
         return None, None, None
 
+def create_pdf(region, date_range, ndvi_mean, ndvi_std, map_path, ts_path, forecast_path):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Environmental Monitoring Report", ln=True, align='C')
+    pdf.ln(10)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 10, f"Region: {region}", ln=True)
+    pdf.cell(0, 10, f"Date Range: {date_range}", ln=True)
+    pdf.cell(0, 10, f"NDVI Mean: {ndvi_mean}", ln=True)
+    pdf.cell(0, 10, f"NDVI Std Dev: {ndvi_std}", ln=True)
+    pdf.ln(10)
+    pdf.set_font("Arial", "B", 12)
+    pdf.cell(0, 10, "NDVI Map:", ln=True)
+    pdf.image(map_path, w=170)
+    pdf.ln(10)
+    pdf.cell(0, 10, "NDVI Time Series:", ln=True)
+    pdf.image(ts_path, w=170)
+    pdf.ln(10)
+    pdf.cell(0, 10, "NDVI Forecast:", ln=True)
+    pdf.image(forecast_path, w=170)
+    pdf.ln(10)
+    pdf.set_font("Arial", size=10)
+    pdf.multi_cell(0, 10, "This report was generated automatically by the Environmental Monitoring System.")
+    return pdf.output(dest='S').encode('latin-1')
+
 def main():
     # Add custom CSS
     render_custom_css()
@@ -205,6 +236,12 @@ def main():
                 m = visualizer.create_map(ndvi)
                 st.session_state['map'] = m
                 
+                # Save your Plotly figures
+                fig_time_series = visualizer.plot_time_series(ndvi_collection)
+                fig_forecast = visualizer.plot_forecast(ndvi_collection, periods=60)
+                fig_time_series.write_image("time_series.png")
+                fig_forecast.write_image("forecast.png")
+                
             except Exception as e:
                 st.error(f"Error processing data: {str(e)}")
     
@@ -243,7 +280,26 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = None
 
-   
+    region = st.session_state['latest_config']['region']['name']
+    start_date = st.session_state.get('start_date', '2023-01-01')
+    end_date = st.session_state.get('end_date', '2023-12-31')
+    date_range = f"{start_date} to {end_date}"
+    ndvi_mean = st.session_state['ndvi_stats']['NDVI_mean']
+    ndvi_std = st.session_state['ndvi_stats']['NDVI_stdDev']
+    map_path = "ndvi_map.png"
+    ts_path = "time_series.png"
+    forecast_path = "forecast.png"
+
+    if st.button("Generate PDF Report"):
+        fig_map = visualizer.plot_time_series(st.session_state['ndvi_collection'])
+        fig_map.write_image("ndvi_map.png")
+        pdf_bytes = create_pdf(region, date_range, ndvi_mean, ndvi_std, map_path, ts_path, forecast_path)
+        st.download_button(
+            label="Download PDF",
+            data=pdf_bytes,
+            file_name=f"{region}_environmental_report.pdf",
+            mime="application/pdf"
+        )
 
     # Render main content
     render_main_content(
