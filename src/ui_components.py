@@ -85,6 +85,9 @@ def render_custom_css():
             gap: 1rem;
             padding-top: 10px;
             padding-bottom: 10px;
+            padding-left: 24px;
+            padding-right: 24px;
+            color: #222;
         }
         
         .stTabs [aria-selected="true"] {
