@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import os
 from dotenv import load_dotenv
+from streamlit_folium import folium_static
+from src.ai_analysis import GeminiAnalyzer
 
 load_dotenv()
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
@@ -161,6 +163,49 @@ def render_sidebar_controls():
         
         return st.session_state.selected_place, start_date, end_date, forecast_years, process
 
-def render_main_content(ndvi_map, ndvi_stats, time_series_fig, forecast_fig, ai_analysis):
-    """Render the main content area with tabs"""
-    
+def render_main_content(ndvi_map, ndvi_stats, time_series_fig, forecast_fig, ai_analysis, region_name):
+    st.markdown("## 📊 Results Overview")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("NDVI Mean", f"{ndvi_stats.get('NDVI_mean', 'N/A'):.3f}" if ndvi_stats and ndvi_stats.get('NDVI_mean') is not None else "N/A")
+    col2.metric("NDVI Std Dev", f"{ndvi_stats.get('NDVI_stdDev', 'N/A'):.3f}" if ndvi_stats and ndvi_stats.get('NDVI_stdDev') is not None else "N/A")
+    col3.metric("Region", region_name if region_name else "N/A")
+
+    st.markdown("---")
+    tab1, tab2, tab3 = st.tabs(["🗺️ NDVI Map", "📈 Time Series", "🔮 Forecast"])
+    with tab1:
+        if ndvi_map is not None:
+            folium_static(ndvi_map)
+        else:
+            st.info("No map available.")
+    with tab2:
+        if time_series_fig is not None:
+            st.plotly_chart(time_series_fig, use_container_width=True)
+        else:
+            st.info("No time series data available.")
+    with tab3:
+        if forecast_fig is not None:
+            st.plotly_chart(forecast_fig, use_container_width=True)
+        else:
+            st.info("No forecast data available.")
+
+    st.markdown("---")
+    st.markdown("## 🤖 AI-Powered Analysis")
+    if st.session_state.get('latest_ndvi') is not None and st.session_state.get('latest_config') is not None:
+        if st.button("Generate AI Analysis", key="ai_analysis_button"):
+            with st.spinner("Analyzing data with Gemini AI..."):
+                gemini_analyzer = GeminiAnalyzer()
+                analysis = gemini_analyzer.analyze_ndvi_trend(
+                    st.session_state['latest_ndvi'],
+                    st.session_state['latest_config']['region']
+                )
+                if analysis['status'] == 'success':
+                    st.success("Analysis Complete!")
+                    st.write(analysis['analysis'])
+                else:
+                    st.error(analysis['analysis'])
+    elif ai_analysis:
+        st.success(ai_analysis)
+    else:
+        st.info("Run the AI analysis to see insights here.")
+
+    # You can add the PDF download button here if desired
