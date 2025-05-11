@@ -54,6 +54,13 @@ class DataFetcher:
                 .filterBounds(region) \
                 .filterDate(start_date, end_date) \
                 .filter(ee.Filter.lt('CLOUD_COVER', self.config['cloud_cover_threshold']))
+            
+            # Add validation
+            count = collection.size().getInfo()
+            if count == 0:
+                raise ValueError(f"No satellite images found for the selected region and time period. Try adjusting the date range or cloud cover threshold.")
+            
+            print(f"Found {count} images in collection")
             return collection
         except Exception as e:
             print(f"Error fetching satellite data: {str(e)}")
@@ -62,14 +69,20 @@ class DataFetcher:
     def calculate_ndvi(self, image):
         """Calculate NDVI for a given image."""
         try:
-            nir = image.select('B5')
-            red = image.select('B4')
-            
+            # Calculate NDVI using Earth Engine's normalizedDifference
             ndvi = image.normalizedDifference(['B5', 'B4']).rename('NDVI')
+            
+            # Add a mask to remove invalid values
+            ndvi = ndvi.updateMask(ndvi.gt(-1).And(ndvi.lt(1)))
+            
             return ndvi
         except Exception as e:
             print(f"Error calculating NDVI: {str(e)}")
-            raise 
+            raise
+
+    def update_region(self, region):
+        """Update the region configuration."""
+        self.config['region'] = region
 
 if 'region' in st.session_state:
     region = st.session_state['region']

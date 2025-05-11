@@ -11,6 +11,13 @@ from src.ai_analysis import GeminiAnalyzer
 import requests
 from dotenv import load_dotenv
 import datetime
+from src.ui_components import (
+    render_custom_css,
+    render_header,
+    render_sidebar_controls,
+    render_main_content
+)
+from datetime import datetime, timedelta
 
 # Windows-specific setup
 if sys.platform == 'win32':
@@ -86,38 +93,39 @@ def google_geocode(place_id):
     except Exception as e:
         return None, None, None
 
-def main():
-    st.title("Environmental Monitoring System")
-    
-    # Place name input
-    st.sidebar.header("Location Search")
-    query = st.sidebar.text_input("Search for a place (Google Autocomplete):")
-    suggestions = []
-    if query and len(query) > 2:
-        suggestions = google_places_autocomplete(query)
+def get_place_coordinates(place_id):
+    """Get coordinates for a place using Google Places API"""
+    url = "https://maps.googleapis.com/maps/api/geocode/json"
+    params = {
+        "place_id": place_id,
+        "key": GOOGLE_API_KEY
+    }
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        if response.status_code != 200:
+            return None, None, None
+        data = response.json()
+        if data.get("status") != "OK":
+            return None, None, None
+        results = data.get("results", [])
+        if results:
+            location = results[0]['geometry']['location']
+            display_name = results[0]['formatted_address']
+            return location['lat'], location['lng'], display_name
+        return None, None, None
+    except Exception as e:
+        st.error(f"Error getting place coordinates: {str(e)}")
+        return None, None, None
 
-    if suggestions:
-        place_choice = st.sidebar.selectbox(
-            "Select a place:",
-            [s['description'] for s in suggestions]
-        )
-        selected = next(s for s in suggestions if s['description'] == place_choice)
-        if st.sidebar.button("Use this place"):
-            lat, lon, display_name = google_geocode(selected['place_id'])
-            if lat and lon:
-                st.sidebar.success(f"Selected: {display_name}")
-                region = {
-                    "name": display_name,
-                    "coordinates": {
-                        "north": lat + 0.05,
-                        "south": lat - 0.05,
-                        "east": lon + 0.05,
-                        "west": lon - 0.05
-                    }
-                }
-                st.session_state['region'] = region
-            else:
-                st.sidebar.error("Could not fetch coordinates for this place.")
+def main():
+    # Add custom CSS
+    render_custom_css()
+    
+    # Render header
+    render_header()
+    
+    # Get controls from sidebar
+    selected_place, start_date, end_date, forecast_years, process = render_sidebar_controls()
 
     # Use session state for region, fallback to config if not set
     if 'region' in st.session_state:
@@ -128,6 +136,8 @@ def main():
         with open('config/config.json', 'r') as f:
             config = json.load(f)
         region = config['region']
+        if 'name' not in region:
+            region['name'] = "Default Region"
 
     # Now, when initializing DataFetcher, pass the region
     data_fetcher = DataFetcher(region=region)
@@ -139,55 +149,69 @@ def main():
     if 'ndvi_collection' not in st.session_state:
         st.session_state['ndvi_collection'] = None
     
-    # Sidebar controls
-    st.sidebar.header("Controls")
-    st.sidebar.header("Date Range Selection")
-    today = datetime.date.today()
-    default_start = today.replace(year=today.year - 1, month=1, day=1)
-    default_end = today
-
-    start_date = st.sidebar.date_input(
-        "Start date", value=default_start, max_value=default_end, key="start_date"
-    )
-    end_date = st.sidebar.date_input(
-        "End date", value=default_end, min_value=start_date, max_value=today, key="end_date"
-    )
-
-    if st.sidebar.button("Process Latest Data"):
+    if process:
         with st.spinner("Processing data..."):
             try:
+                # If a place is selected, get its coordinates
+                if 'selected_place_id' in st.session_state and st.session_state.selected_place_id:
+                    lat, lon, display_name = get_place_coordinates(st.session_state.selected_place_id)
+                    if lat and lon:
+                        # Update region in session state
+                        st.session_state['region'] = {
+                            'name': display_name,
+                            'coordinates': {
+                                'north': lat + 0.05,
+                                'south': lat - 0.05,
+                                'east': lon + 0.05,
+                                'west': lon - 0.05
+                            }
+                        }
+                        # Update data_fetcher with new region
+                        data_fetcher = DataFetcher(region=st.session_state['region'])
+                        ndvi_processor = NDVIProcessor(data_fetcher)
+                        visualizer = Visualizer(data_fetcher)
+                
                 # Get the latest image
                 collection = data_fetcher.fetch_satellite_data(
                     start_date=start_date.strftime("%Y-%m-%d"),
                     end_date=end_date.strftime("%Y-%m-%d")
                 )
+                
+                # Validate collection
+                if collection.size().getInfo() == 0:
+                    st.error("No satellite images found for the selected region and time period")
+                    return
+                
                 latest_image = ee.Image(collection.first())
                 
                 # Calculate NDVI
                 ndvi = data_fetcher.calculate_ndvi(latest_image)
                 
-                # Create map
-                m = visualizer.create_map(ndvi)
-                
-                
-                # Show statistics
-                stats = ndvi_processor.get_statistics(ndvi)
-            
-                
-                # Process and store NDVI time series in session state
-                ndvi_collection = ndvi_processor.process_time_series()
-                st.session_state['ndvi_collection'] = ndvi_collection
-                
                 # Store NDVI and config in session state
                 st.session_state['latest_ndvi'] = ndvi
                 st.session_state['latest_config'] = data_fetcher.config
+                
+                # Calculate statistics
+                stats = ndvi_processor.get_statistics(ndvi)
+                
+                # Store in session state
+                st.session_state['ndvi_stats'] = stats
+                
+                # Process time series
+                ndvi_collection = ndvi_processor.process_time_series()
+                st.session_state['ndvi_collection'] = ndvi_collection
+                
+                # Create map
+                m = visualizer.create_map(ndvi)
                 st.session_state['map'] = m
-                st.session_state['ndvi_stats'] = stats.getInfo()
+                
             except Exception as e:
                 st.error(f"Error processing data: {str(e)}")
     
     # Display configuration
     st.sidebar.header("Current Configuration")
+    if 'selected_place' in st.session_state and st.session_state.selected_place:
+        st.sidebar.markdown(f"**Selected Place:** {st.session_state.selected_place}")
     st.sidebar.json(data_fetcher.config)
     
     # Show map if available
@@ -219,10 +243,18 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = None
 
-    st.sidebar.header("Forecast Options")
-    forecast_years = st.sidebar.slider(
-        "Forecast years (max 5)", min_value=1, max_value=5, value=3, key="forecast_years"
+   
+
+    # Render main content
+    render_main_content(
+        ndvi_map=st.session_state.get('map'),
+        ndvi_stats=st.session_state.get('ndvi_stats'),
+        time_series_fig=visualizer.plot_time_series(st.session_state.get('ndvi_collection')) if st.session_state.get('ndvi_collection') else None,
+        forecast_fig=visualizer.plot_forecast(st.session_state.get('ndvi_collection'), periods=forecast_years*12) if st.session_state.get('ndvi_collection') else None,
+        ai_analysis=st.session_state.get('ai_analysis')
     )
+
+    # Display AI Analysis section
 
 def display_ai_analysis():
     st.subheader("AI-Powered Analysis")

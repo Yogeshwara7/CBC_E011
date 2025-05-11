@@ -19,3 +19,10 @@ def load_config():
             return json.load(f)
     
     raise FileNotFoundError("No configuration file found in config directory")
+
+def load_config():
+    return {
+        'gemini': {
+            'api_key': 'AIzaSyD5_XGDYTwIlRkDqSZAk003I_3ceCH64lQ'  # Make sure this is set
+        }
+    }
